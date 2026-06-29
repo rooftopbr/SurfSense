@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import gc
 import logging
+import os
 import time
 import uuid
 from collections import defaultdict
@@ -809,6 +810,27 @@ allowed_origins.extend(
         "http://127.0.0.1:3000",
     ]
 )
+
+# Local stacks expose app.localhost, app.<stack>.localhost, and legacy app.<stack> via Caddy.
+if os.getenv("LOCAL_INGRESS_DUAL_HOST", "").upper() == "TRUE":
+    domain = os.getenv("DOMAIN", "")
+    hosts: list[str] = ["localhost"]
+    if domain:
+        hosts.insert(0, domain)
+        if domain.endswith(".localhost"):
+            legacy = domain[: -len(".localhost")]
+            if legacy and legacy not in hosts:
+                hosts.insert(0, legacy)
+    for host in dict.fromkeys(hosts):
+        origin = f"https://app.{host}"
+        if origin not in allowed_origins:
+            allowed_origins.append(origin)
+    for origin in (
+        "http://localhost:3929",
+        "http://127.0.0.1:3929",
+    ):
+        if origin not in allowed_origins:
+            allowed_origins.append(origin)
 
 app.add_middleware(CsrfOriginMiddleware)
 app.add_middleware(
